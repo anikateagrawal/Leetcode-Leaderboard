@@ -197,7 +197,8 @@ function renderLeaderboard(data) {
                 <a href="${s.url}" target="_blank" class="text-blue-400">${s.name}</a>
             </td>
             <td class="p-2 border">${s.section}</td>
-            <td class="p-2 border">${s.dayScholarHosteller || ''}</td>
+            <td class="p-2 border font-bold ${   s.up > 0 ? 'text-green-400' :    s.up < 0 ? 'text-red-400' : 'text-gray-400'}">
+    ${s.up ? (s.up > 0 ? `+${s.up}` : s.up) : ''}</td>
             <td class="p-2 border">${s.totalSolved || 0}</td>
             <td class="p-2 border text-green-400">${s.easy || 0}</td>
             <td class="p-2 border text-yellow-400">${s.medium || 0}</td>
@@ -261,7 +262,9 @@ function sortLeaderboard(sortId) {
         "sort-easy": "easy",
         "sort-medium": "medium",
         "sort-hard": "hard",
-        "sort-section": "section"
+        "sort-section": "section",
+        "sort-up": "up",                 // ✅ ADD
+        "sort-last": "lastUpdated"       // ✅ ADD (used later)
     };
 
     const column = columnMap[sortId];
@@ -272,13 +275,28 @@ function sortLeaderboard(sortId) {
     }
 
     currentData.sort((a, b) => {
-        if (typeof a[column] === "number") {
-            return currentSort.ascending ? a[column] - b[column] : b[column] - a[column];
-        } else {
-            return currentSort.ascending
-                ? a[column].localeCompare(b[column])
-                : b[column].localeCompare(a[column]);
+        let valA = a[column];
+        let valB = b[column];
+    
+        // 🔹 Handle nulls
+        if (valA == null) return 1;
+        if (valB == null) return -1;
+    
+        // 🔹 Date sorting (Last Active)
+        if (column === "lastUpdated") {
+            valA = new Date(valA).getTime();
+            valB = new Date(valB).getTime();
         }
+    
+        // 🔹 Numeric sorting
+        if (typeof valA === "number") {
+            return currentSort.ascending ? valA - valB : valB - valA;
+        }
+    
+        // 🔹 String sorting
+        return currentSort.ascending
+            ? String(valA).localeCompare(String(valB))
+            : String(valB).localeCompare(String(valA));
     });
 
     renderLeaderboard(currentData);
@@ -316,9 +334,18 @@ async function syncLeetCodeStatsParallel(data) {
         const username = student.url.split("/u/")[1]?.replace("/", "");
         if (!username) return student;
 
-        const stats = await fetchLeet(username);
-        // ✅ MERGE stats into existing student
-        Object.assign(student, stats);
+         // 🔹 Store previous total
+         const prevTotal = student.totalSolved || 0;
+
+         // 🔹 Fetch latest stats
+         const stats = await fetchLeet(username);
+ 
+         // 🔹 Calculate UP
+         const newTotal = stats.totalSolved || 0;
+         stats.up = newTotal - prevTotal;
+ 
+         // 🔹 Merge everything
+         Object.assign(student, stats);
 
         return student;
     });
