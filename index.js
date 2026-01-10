@@ -356,7 +356,6 @@ async function syncLeetCodeStatsParallel(data) {
     // Update Google Sheet once for all updated students
     if (updatedStudents.length > 0) await updateSheet(updatedStudents);
 
-    console.log("sheet updated");
     // Re-render leaderboard
     renderLeaderboard(currentData);
 }
