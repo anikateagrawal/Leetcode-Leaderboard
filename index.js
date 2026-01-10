@@ -26,6 +26,7 @@ switchBatch(currentBatch)
 
 sectionFilter.addEventListener('change', initializePage);
 searchBar.addEventListener('input', initializePage);
+updateBtn.addEventListener('click',updateData);
 
 document.getElementById('export-btn').addEventListener('click', exportCSV);
 
@@ -371,8 +372,6 @@ async function initializePage() {
         currentData = applyFilters(data);
         populateSections(data); // populate section dropdown
         renderLeaderboard(currentData);
-
-        updateBtn.addEventListener('click',()=> syncLeetCodeStatsParallel(currentData));
     } catch (err) {
         console.error(err);
         errorState.classList.remove("hidden");
@@ -381,6 +380,9 @@ async function initializePage() {
     }
 }
 
+async function updateData(){
+    syncLeetCodeStatsParallel(currentData);
+}
 
 
 
