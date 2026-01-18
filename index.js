@@ -136,7 +136,8 @@ async function fetchLeet(username) {
             query: userStatsQuery,
             variables: { username }
         }, {
-            headers: { "Target-URL": graphqlUrl }
+            headers: { "Target-URL": graphqlUrl },
+            timeout: 15000
         });
 
         // Fetch recent submissions
@@ -144,7 +145,8 @@ async function fetchLeet(username) {
             query: recentSubQuery,
             variables: { username, limit: 2 },
           },{
-            headers: { "Target-URL": graphqlUrl }
+            headers: { "Target-URL": graphqlUrl },
+            timeout: 15000
         });
   
 
@@ -357,6 +359,9 @@ async function syncLeetCodeStatsParallel(data) {
     if (updatedStudents.length > 0) await updateSheet(updatedStudents);
 
     // Re-render leaderboard
+    let data = await fetchSheetData();
+    currentData = applyFilters(data);
+    populateSections(data); // populate section dropdown
     renderLeaderboard(currentData);
 }
 
