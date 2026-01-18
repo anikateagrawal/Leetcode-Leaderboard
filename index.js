@@ -359,9 +359,9 @@ async function syncLeetCodeStatsParallel(data) {
     if (updatedStudents.length > 0) await updateSheet(updatedStudents);
 
     // Re-render leaderboard
-    let data = await fetchSheetData();
-    currentData = applyFilters(data);
-    populateSections(data); // populate section dropdown
+    let data2 = await fetchSheetData();
+    currentData = applyFilters(data2);
+    populateSections(data2); // populate section dropdown
     renderLeaderboard(currentData);
 }
 
