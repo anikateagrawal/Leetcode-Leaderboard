@@ -113,6 +113,11 @@ query userStats($username: String!) {
       }
     }
   }
+  userContestRanking(username: $username) {
+    rating
+    attendedContestsCount
+    globalRanking
+  }
 }`;
 
 // GraphQL query to fetch recent submissions
@@ -160,6 +165,12 @@ async function fetchLeet(username) {
             if (s.difficulty === "Hard") stats.hard = s.count;
         });
 
+        /* ---------- Contest Rating ---------- */
+        const contest = res.data.data.userContestRanking;
+        stats.rating = contest?.rating ? Math.round(contest.rating) : null;
+        stats.globalRank = contest?.globalRanking ?? null;
+        stats.contests = contest?.attendedContestsCount ?? 0;
+
         // Most recent submission timestamp
         const recentSub = recentSubResponse.data.data.recentAcSubmissionList || [];
         
@@ -171,7 +182,9 @@ async function fetchLeet(username) {
 
         return stats;
     } catch {
-        return { totalSolved: 0, easy: 0, medium: 0, hard: 0 , lastUpdated:null};
+        return { totalSolved: 0, easy: 0, medium: 0, hard: 0 , lastUpdated:null,rating: null,
+            globalRank: null,
+            contests: 0,};
     }
 }
 
@@ -200,6 +213,7 @@ function renderLeaderboard(data) {
                 <a href="${s.url}" target="_blank" class="text-blue-400">${s.name}</a>
             </td>
             <td class="p-2 border">${s.section}</td>
+            <td class="p-2 border text-purple-400 font-semibold">${s.rating ?? "-"}</td>
             <td class="p-2 border font-bold ${   s.up > 0 ? 'text-green-400' :    s.up < 0 ? 'text-red-400' : 'text-gray-400'}">
     ${s.up ? (s.up > 0 ? `+${s.up}` : s.up) : ''}</td>
             <td class="p-2 border">${s.totalSolved || 0}</td>
@@ -212,8 +226,7 @@ function renderLeaderboard(data) {
     target="_blank" 
     class="inline-flex items-center px-4 py-2 bg-green-500 text-white text-sm text-center rounded hover:bg-green-600 transition"
     style="white-space: nowrap;">
-    <i class="fab fa-whatsapp mr-2"></i>
-    Send Reminder</a>     </td>
+    <i class="fab fa-whatsapp mr-2"></i>Send Reminder</a></td>
 
         `;
         leaderboardBody.appendChild(row);
@@ -267,7 +280,8 @@ function sortLeaderboard(sortId) {
         "sort-hard": "hard",
         "sort-section": "section",
         "sort-up": "up",                 // ✅ ADD
-        "sort-last": "lastUpdated"       // ✅ ADD (used later)
+        "sort-last": "lastUpdated",      // ✅ ADD (used later)
+        "sort-rating": "rating"
     };
 
     const column = columnMap[sortId];
@@ -315,8 +329,9 @@ function populateSections(data) {
 /* ===================== CSV EXPORT ===================== */
 function exportCSV() {
     const rows = [...document.querySelectorAll("table tr")].map(tr =>
-        [...tr.children].map(td => td.innerText).join(",")
+        [...tr.children].map(td => td.innerText.trim()).join(",")
     );
+    // console.log(rows)
     const blob = new Blob([rows.join("\n")], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -325,45 +340,66 @@ function exportCSV() {
 }
 
 /* ===================== LEETCODE PARALLEL SYNC ===================== */
+function chunkArray(arr, size) {
+    const chunks = [];
+    for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+    }
+    return chunks;
+}
+
 async function syncLeetCodeStatsParallel(data) {
-    // Background LeetCode sync (parallel)
-    console.log("syncing in background")
-    
+    console.log("syncing leetcode data in batches...");
+
     const studentsWithLeet = data.filter(
-        s => s.url && s.url.includes("leetcode.com/u/")
+        s => s.url && typeof s.url === "string" && s.url.includes("leetcode.com/u/")
     );
 
-    const promises = studentsWithLeet.map(async (student) => {
-        const username = student.url.split("/u/")[1]?.replace("/", "");
-        if (!username) return student;
+    const BATCH_SIZE = 100;
+    const batches = chunkArray(studentsWithLeet, BATCH_SIZE);
 
-         // 🔹 Store previous total
-         const prevTotal = student.totalSolved || 0;
+    console.log(`Total students: ${studentsWithLeet.length}`);
+    console.log(`Total batches: ${batches.length}`);
 
-         // 🔹 Fetch latest stats
-         const stats = await fetchLeet(username);
- 
-         // 🔹 Calculate UP
-         const newTotal = stats.totalSolved || 0;
-         stats.up = newTotal - prevTotal;
- 
-         // 🔹 Merge everything
-         Object.assign(student, stats);
+    for (let i = 0; i < batches.length; i++) {
+        console.log(`🚀 Processing batch ${i + 1}/${batches.length}`);
 
-        return student;
-    });
+        const batch = batches[i];
 
-    const updatedStudents = await Promise.all(promises);
+        const promises = batch.map(async (student) => {
+            const username = student.url.split("/u/")[1]?.replace("/", "");
+            if (!username) return student;
 
-    // Update Google Sheet once for all updated students
-    if (updatedStudents.length > 0) await updateSheet(updatedStudents);
+            const prevTotal = student.totalSolved || 0;
 
-    // Re-render leaderboard
-    let data2 = await fetchSheetData();
-    currentData = applyFilters(data2);
-    populateSections(data2); // populate section dropdown
+            const stats = await fetchLeet(username);
+
+            const newTotal = stats.totalSolved || 0;
+            stats.up = newTotal - prevTotal;
+
+            Object.assign(student, stats);
+            return student;
+        });
+
+        // 🔹 Run THIS batch in parallel
+        await Promise.all(promises);
+
+        // Optional: small delay to be extra safe (recommended)
+        await new Promise(res => setTimeout(res, 500));
+    }
+
+    // 🔹 Update sheet once after all batches
+    await updateSheet(studentsWithLeet);
+
+    // 🔹 Reload & re-render
+    const freshData = await fetchSheetData();
+    currentData = applyFilters(freshData);
+    populateSections(freshData);
     renderLeaderboard(currentData);
+
+    console.log("✅ All batches completed");
 }
+
 
 /* ===================== INITIALIZE PAGE ===================== */
 async function initializePage() {
