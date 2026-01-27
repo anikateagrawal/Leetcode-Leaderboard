@@ -384,12 +384,12 @@ async function syncLeetCodeStatsParallel(data) {
         // 🔹 Run THIS batch in parallel
         await Promise.all(promises);
 
+        // 🔹 Update THIS batch only
+        await updateSheet(batch);
+
         // Optional: small delay to be extra safe (recommended)
         await new Promise(res => setTimeout(res, 500));
     }
-
-    // 🔹 Update sheet once after all batches
-    await updateSheet(studentsWithLeet);
 
     // 🔹 Reload & re-render
     const freshData = await fetchSheetData();
