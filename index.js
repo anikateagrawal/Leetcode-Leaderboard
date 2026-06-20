@@ -187,6 +187,10 @@ async function fetchLeet(username) {
             contests: 0,};
     }
 }
+async function initialLoad() {
+    const anikate = await fetchLeet("Anikate_Agrawal");
+    console.log(anikate)
+}
 
 /* ===================== RENDER ===================== */
 let currentData = [];
@@ -408,6 +412,8 @@ async function initializePage() {
     leaderboardBody.innerHTML = `<tr><td colspan="11" class="text-center p-4">Loading...</td></tr>`;
 
     try {
+        await initialLoad(); // to load proxy server
+
         let data = await fetchSheetData();
         currentData = applyFilters(data);
         populateSections(data); // populate section dropdown
