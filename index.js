@@ -380,8 +380,7 @@ async function syncLeetCodeStatsParallel(data) {
 
             const newTotal = stats.totalSolved || 0;
             stats.up = newTotal - prevTotal;
-
-            Object.assign(student, stats);
+            if(up >= 0) Object.assign(student, stats);
             return student;
         });
 
